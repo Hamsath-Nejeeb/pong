@@ -1,85 +1,123 @@
 import pygame as pg
 import sys
-import os
+import random
 
-#made by Fyodor Belousov
+WIDTH, HEIGHT = 800, 500
+HUD_HEIGHT = 70
+FPS = 60
 
-WIDTH, HEIGHT = 600, 400
-ball_x = WIDTH // 2
-ball_y = HEIGHT // 2
-ball_radius = 20
-ball_speed = 5
+BALL_SIZE = 20
+BALL_SPEED_X = 5
+BALL_SPEED_Y = 4
 
-ball_speed_x = ball_speed
-ball_speed_y = ball_speed
+PADDLE_WIDTH = 15
+PADDLE_HEIGHT = 100
+PADDLE_SPEED = 6
 
-platform_width = 20
-platform_height = 100
-
-left_platform_x = 10
-left_platform_y = HEIGHT // 2 - platform_height // 2
-
-right_platform_x = WIDTH - 25
-right_platform_y = HEIGHT // 2 - platform_height // 2
-
-white = (255, 255, 255)
-black = (0, 0, 0)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
 
 pg.init()
-pg.font.init()
-pg.display.set_caption("Ping Pong")
 screen = pg.display.set_mode((WIDTH, HEIGHT))
+pg.display.set_caption("Ping Pong")
+clock = pg.time.Clock()
+font = pg.font.SysFont("Arial", 30)
+
+ball = pg.Rect(WIDTH // 2, HEIGHT // 2, BALL_SIZE, BALL_SIZE)
+
+ball_dx = random.choice([-BALL_SPEED_X, BALL_SPEED_X])
+ball_dy = random.choice([-BALL_SPEED_Y, BALL_SPEED_Y])
+
+left_paddle = pg.Rect(30, HUD_HEIGHT + 20, PADDLE_WIDTH, PADDLE_HEIGHT)
+right_paddle = pg.Rect(WIDTH - 45, HUD_HEIGHT + 20, PADDLE_WIDTH, PADDLE_HEIGHT)
 
 score_left = 0
 score_right = 0
 
-def reset_ball():
-  return WIDTH // 2, HEIGHT // 2, ball_speed, ball_speed
+def reset_ball(direction):
+    global ball_dx, ball_dy
+    ball.center = (WIDTH // 2, HUD_HEIGHT + (HEIGHT - HUD_HEIGHT) // 2)
+    ball_dx = BALL_SPEED_X * direction
+    ball_dy = random.choice([-BALL_SPEED_Y, BALL_SPEED_Y])
+    if ball_dy == 0:
+        ball_dy = BALL_SPEED_Y
 
-while(True):
-  pg.time.Clock().tick(60)
-  screen.fill(black)
-  for event in pg.event.get():
-    if event.type == pg.QUIT:
-      pg.quit()
-      sys.exit()
-  keys = pg.key.get_pressed()
-  if keys[pg.K_w] and left_platform_y > 0:
-    left_platform_y -= 5
-  if keys[pg.K_s] and left_platform_y < HEIGHT - platform_height:
-    left_platform_y += 5
-  if keys[pg.K_UP] and right_platform_y > 0:
-    right_platform_y -= 5
-  if keys[pg.K_DOWN] and right_platform_y < HEIGHT - platform_height:
-    right_platform_y += 5
-  
-  ball_x += ball_speed_x
-  ball_y += ball_speed_y
+def clamp_paddles():
+    left_paddle.top = max(HUD_HEIGHT, left_paddle.top)
+    left_paddle.bottom = min(HEIGHT, left_paddle.bottom)
+    right_paddle.top = max(HUD_HEIGHT, right_paddle.top)
+    right_paddle.bottom = min(HEIGHT, right_paddle.bottom)
 
-  if (ball_x - ball_radius < left_platform_x and (left_platform_y < ball_y < left_platform_y + platform_height)):
-    ball_speed_x = -ball_speed_x
-  if (right_platform_x < ball_x + ball_radius < right_platform_x + platform_width and right_platform_y < ball_y + ball_radius < right_platform_y + platform_height):
-    ball_speed_x = -ball_speed_x
+def paddle_bounce(paddle):
+    global ball_dx, ball_dy
+    if ball_dx < 0:
+        ball.left = paddle.right
+    else:
+        ball.right = paddle.left
+    ball_dx *= -1
+    offset = (ball.centery - paddle.centery) / (PADDLE_HEIGHT / 2)
+    ball_dy = int(offset * BALL_SPEED_Y * 1.5)
+    if ball_dy == 0:
+        ball_dy = random.choice([-1, 1])
 
+while True:
+    clock.tick(FPS)
+    screen.fill(BLACK)
 
-  if ball_x < 0 or ball_x > WIDTH:
-    ball_speed_x = -ball_speed_x
+    for event in pg.event.get():
+        if event.type == pg.QUIT:
+            pg.quit()
+            sys.exit()
 
-  if ball_y < 0 or ball_y > HEIGHT:
-    ball_speed_y = -ball_speed_y
+    keys = pg.key.get_pressed()
+    if keys[pg.K_w]:
+        left_paddle.y -= PADDLE_SPEED
+    if keys[pg.K_s]:
+        left_paddle.y += PADDLE_SPEED
+    if keys[pg.K_UP]:
+        right_paddle.y -= PADDLE_SPEED
+    if keys[pg.K_DOWN]:
+        right_paddle.y += PADDLE_SPEED
 
-  if ball_x < 0:
-    score_right += 1
-    ball_x, ball_y, ball_speed_x, ball_speed_y = reset_ball()
-  elif ball_x > WIDTH:
-    score_left += 1
-    ball_x, ball_y, ball_speed_x, ball_speed_y = reset_ball()
-  
-  pg.draw.rect(screen, white, (left_platform_x, left_platform_y, platform_width, platform_height))
-  pg.draw.rect(screen, white, (right_platform_x, right_platform_y, platform_width, platform_height))
-  pg.draw.ellipse(screen, white, (ball_x, ball_y, ball_radius, ball_radius))
-  screen.blit(pg.font.SysFont("Arial", 30).render(str(score_left), True, white), (WIDTH // 2 - 20, HEIGHT - HEIGHT))
-  screen.blit(pg.font.SysFont("Arial", 30).render(str(score_right), True, white), (WIDTH // 2 + 20, HEIGHT - HEIGHT))
+    clamp_paddles()
 
-  pg.display.flip()
-  pg.display.update()
+    ball.x += ball_dx
+    ball.y += ball_dy
+
+    if ball.top <= HUD_HEIGHT:
+        ball.top = HUD_HEIGHT
+        ball_dy *= -1
+
+    if ball.bottom >= HEIGHT:
+        ball.bottom = HEIGHT
+        ball_dy *= -1
+
+    if ball_dx < 0 and ball.colliderect(left_paddle):
+        paddle_bounce(left_paddle)
+
+    if ball_dx > 0 and ball.colliderect(right_paddle):
+        paddle_bounce(right_paddle)
+
+    if ball.right < 0:
+        score_right += 1
+        reset_ball(1)
+
+    if ball.left > WIDTH:
+        score_left += 1
+        reset_ball(-1)
+
+    pg.draw.line(screen, WHITE, (0, HUD_HEIGHT), (WIDTH, HUD_HEIGHT), 3)
+
+    score_text = font.render(
+        f"{score_left}  :  {score_right}",
+        True,
+        WHITE
+    )
+    screen.blit(score_text,
+                (WIDTH // 2 - score_text.get_width() // 2, 20))
+
+    pg.draw.rect(screen, WHITE, left_paddle)
+    pg.draw.rect(screen, WHITE, right_paddle)
+    pg.draw.ellipse(screen, WHITE, ball)
+
+    pg.display.flip()
